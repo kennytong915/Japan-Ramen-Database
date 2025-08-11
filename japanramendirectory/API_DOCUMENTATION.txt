@@ -1,0 +1,384 @@
+# API Documentation
+
+## 1. Authentication
+
+### POST `/auth/login`
+Authenticate a user and issue a JWT.
+
+- **Request Body** (JSON, all fields required):
+  ```json
+  {
+    "username": "string",
+    "password": "string",
+    "recaptchaResponse": "string"
+  }
+  ```
+- **Response 200** `AuthResponseDTO` (application/json):
+  ```json
+  {
+    "token": "jwt-token-string",
+    "id": 123,
+    "username": "jdoe",
+    "role": "USER",
+    "expiresIn": 3600000
+  }
+  ```
+- **Errors**:
+  - 400 Bad Request  
+    • "reCAPTCHA validation failed"  
+    • "Your account is temporarily locked…"  
+    • "Invalid username or password"  
+    • "Authentication failed: …"
+
+---
+
+## 2. reCAPTCHA
+
+### GET `/api/recaptcha/sitekey`
+Retrieve the Google reCAPTCHA site-key for front-end integration.
+
+- **Response 200** (application/json):
+  ```json
+  { "siteKey": "your_site_key_here" }
+  ```
+
+---
+
+## 3. Users (`/api/users`)
+
+### POST `/api/users/register`
+Register a new user account with rate-limiting & reCAPTCHA.
+
+- **Request Body**: `RegistrationDTO`
+  ```json
+  {
+    "username": "string (3–30, alphanumeric, ._-)",
+    "password": "string (≥8, must include digit, lower, upper, special)",
+    "recaptchaResponse": "string"
+  }
+  ```
+- **Response 201** `UserDTO`:
+  ```json
+  { "id": 1, "username": "jdoe", "role": "USER" }
+  ```
+- **Errors**:
+  - 400 Bad Request (validation/reCAPTCHA failure)
+  - 429 Too Many Requests (rate limit exceeded)
+
+---
+
+### POST `/api/users`
+**Role**: ADMIN  
+Create an arbitrary user (no reCAPTCHA).
+
+- **Request Body**: full `User` JSON  
+- **Response 201** `UserDTO`
+
+---
+
+### GET `/api/users`
+**Role**: ADMIN  
+List all users.
+
+- **Response 200** List of `UserDTO`
+
+---
+
+### GET `/api/users/me`
+**Auth**: any authenticated user  
+Get the currently-logged-in user.
+
+- **Response 200** `UserDTO`  
+- 401 Unauthorized if not logged in
+
+---
+
+### GET `/api/users/{id}`
+**Role**: ADMIN or owner  
+Fetch user by numeric ID.
+
+- **Response 200** `UserDTO` or 404 if not found
+
+---
+
+### GET `/api/users/username/{username}`
+Public lookup by username.
+
+- **Response 200** `UserDTO` or 404
+
+---
+
+### PUT `/api/users/{id}`
+**Role**: ADMIN or owner  
+Update user fields.
+
+- **Request Body**: full `User` JSON  
+- **Response 200** updated `UserDTO` or 404  
+- 400 on invalid data
+
+---
+
+### DELETE `/api/users/{id}`
+**Role**: ADMIN  
+Remove a user.
+
+- **Response 204 No Content** or 404
+
+---
+
+### PATCH `/api/users/{id}/role/admin`
+**Role**: ADMIN  
+Promote user to ADMIN.
+
+- **Response 200** `UserDTO` or 404
+
+---
+
+### PATCH `/api/users/{id}/role/user`
+**Role**: ADMIN  
+Demote user to USER.
+
+- **Response 200** `UserDTO` or 404
+
+---
+
+## 4. Restaurants (`/api/restaurants`)
+
+### CRUD
+
+- **POST** `/api/restaurants`  
+  Create a restaurant  
+  - Body: full `Restaurant` model  
+  - 201 + `RestaurantDTO`
+- **GET** `/api/restaurants`  
+  List all  
+  - 200 + `[RestaurantDTO]`
+  - **Pagination Support**:
+    - Query parameters: `paginated=true&page=0&size=20`
+    - Response: `PageResponse<RestaurantDTO>` when `paginated=true`
+    ```json
+    {
+      "content": [RestaurantDTO array],
+      "pageNumber": 0,
+      "pageSize": 20,
+      "totalElements": 100,
+      "totalPages": 5,
+      "last": false
+    }
+    ```
+- **GET** `/api/restaurants/{id}`  
+  By ID  
+  - 200 + `RestaurantDTO` or 404
+- **PUT** `/api/restaurants/{id}`  
+  Update  
+  - Body: `Restaurant`  
+  - 200 + `RestaurantDTO` or 404
+- **DELETE** `/api/restaurants/{id}`  
+  Remove  
+  - 204 or 404
+
+### Filtering & Ranking
+
+All filtering endpoints below support pagination with the same query parameters: `paginated=true&page=0&size=20`
+
+When pagination is requested, the response will be a `PageResponse<RestaurantDTO>` object as described above.
+
+- **GET** `/api/restaurants/ramendb-score/{score}`  
+- **GET** `/api/restaurants/tabelog-score/{score}`  
+- **GET** `/api/restaurants/area/{areaId}`  
+- **GET** `/api/restaurants/prefecture/{prefectureId}`  
+- **GET** `/api/restaurants/soupBase/{soupBase}`  
+- **GET** `/api/restaurants/score/{score}`  
+- **GET** `/api/restaurants/genre/{genre}`  
+- **GET** `/api/restaurants/top/{limit}`  
+
+All return:
+- `200 + [RestaurantDTO]` filtered by the path variable when `paginated=false` or not specified
+- `200 + PageResponse<RestaurantDTO>` when `paginated=true`
+
+### Lookup Lists
+
+- **GET** `/api/restaurants/areas` → `[Area]`  
+- **GET** `/api/restaurants/prefectures` → `[Prefecture]`  
+- **GET** `/api/restaurants/genres` → `[Genre]`  
+- **GET** `/api/restaurants/soupbases` → `[SoupBase]`
+
+### Front‐Page Cards
+
+- **GET** `/api/restaurants/frontpage-cards`  
+  Top 5 restaurants for UI cards → `[RestaurantCardDTO]`
+
+---
+
+## 5. Ranking (`/api/ranking`)
+
+### GET `/api/ranking`
+Multi-filtered, paginated ranking of restaurants.
+
+**Query Parameters** (all optional):
+- `prefectureId` (Long)  
+- `areaId` (Long)  
+- `genres` (List<Genre>)  
+- `soupBases` (List<SoupBase>)  
+- `minRamendbScore` (Double)  
+- `minTabelogScore` (Double)  
+- `minScore` (Double)  
+- `reservationRequired` (Boolean)  
+- `sortBy` (String, default "score")  
+- `sortDirection` (`ASC`/`DESC`, default `DESC`)  
+- `page` (int, default `0`)  
+- `size` (int, default `20`)
+
+- **Response 200** `[RestaurantRankingDTO]`
+
+---
+
+### GET `/api/ranking/top`
+Limit top rated restaurants.  
+- **Query**: `limit` (int, default 10)  
+- **Response 200** `[RestaurantRankingDTO]`
+
+---
+
+### GET `/api/ranking/genres`  
+- **Response 200** `[Genre]`
+
+### GET `/api/ranking/soupbases`  
+- **Response 200** `[SoupBase]`
+
+---
+
+## 6. Comments (`/api/comments`)
+
+### POST `/api/comments`  
+**Auth** required. Create a comment with rate-limiting.
+
+- **Body**: `CommentRequestDTO`  
+- **Response 201** `CommentDTO`  
+- 429 on too many submissions
+
+---
+
+### PUT `/api/comments/{commentId}`  
+**Auth** required. Update your own comment (rate limit).
+
+- **Body**: `CommentRequestDTO`  
+- **Response 200** `CommentDTO`
+
+---
+
+### DELETE `/api/comments/{commentId}`  
+**Auth** required. Delete your own comment.
+
+- **Response 204 No Content`
+
+---
+
+### GET `/api/comments/restaurant/{restaurantId}`  
+List all comments for a restaurant.  
+- **Response 200** `[CommentDTO]`
+
+---
+
+### GET `/api/comments/restaurant/{restaurantId}/paginated`  
+Same as above, but paginated.  
+- Query via Spring `Pageable` (page, size, sort)  
+- **Response 200** `Page<CommentDTO>`
+
+---
+
+### GET `/api/comments/user`  
+**Auth** required. List all comments by current user.  
+- **Response 200** `[CommentDTO]`
+
+---
+
+### GET `/api/comments/{commentId}`  
+Fetch a single comment.  
+- **Response 200** `CommentDTO` or 404
+
+---
+
+### POST `/api/comments/report`  
+**Auth** required. Report another user's comment (rate limit).
+
+- **Body**: `ReportCommentDTO`  
+  ```json
+  { "commentId": 42, "reason": "Inappropriate content..." }
+  ```
+- **Response 200** `"Comment reported successfully"`  
+- 429 Too Many Requests
+
+---
+
+### GET `/api/comments/reported`  
+**Role**: ADMIN  
+List all reported comments.  
+- **Response 200** `[CommentDTO]`
+
+---
+
+### PUT `/api/comments/reported/{commentId}/review`  
+**Role**: ADMIN  
+Approve or reject a reported comment.
+
+- **Body**: `boolean` (true=approve, false=reject)  
+- **Response 200** updated `CommentDTO` or 404
+
+---
+
+### GET `/api/comments/has-commented/{restaurantId}`  
+**Auth** required.  
+Check if current user has commented on the given restaurant.  
+- **Response 200** `Boolean`
+
+---
+
+### GET `/api/comments/can-comment/{restaurantId}`  
+**Auth** required.  
+Check if current user is allowed to comment (e.g. rate/cool-down).  
+- **Response 200** may be `Boolean` or error message
+
+---
+
+## 7. Address (`/api/address`)
+
+### Prefectures
+
+- **GET** `/api/address/prefectures` → `[Prefecture]`  
+- **GET** `/api/address/prefectures/{id}` → `Prefecture` or 404  
+- **POST** `/api/address/prefectures` → Creates new `Prefecture` → 201  
+- **PUT** `/api/address/prefectures/{id}` → Updates → `Prefecture` or 404  
+- **DELETE** `/api/address/prefectures/{id}` → 204 or 404
+
+### Areas
+
+- **GET** `/api/address/areas` → `[Area]`  
+- **GET** `/api/address/areas/{id}` → `Area` or 404  
+- **GET** `/api/address/prefectures/{prefectureId}/areas` → `[Area]`  
+- **POST** `/api/address/areas` → 201 + `Area`  
+- **PUT** `/api/address/areas/{id}` → `Area` or 404  
+- **DELETE** `/api/address/areas/{id}` → 204 or 404
+
+### Addresses
+
+- **GET** `/api/address` → `[Address]`  
+- **GET** `/api/address/{id}` → `Address` or 404  
+- **GET** `/api/address/areas/{areaId}/addresses` → `[Address]`  
+- **GET** `/api/address/prefectures/{prefectureId}/addresses` → `[Address]`  
+- **POST** `/api/address` → 201 + `Address`  
+- **PUT** `/api/address/{id}` → `Address` or 404  
+- **DELETE** `/api/address/{id}` → 204 or 404
+
+---
+
+> **Legend**  
+> - DTO = Data Transfer Object  
+> - IDs are numeric (Long)  
+> - 400 = validation or business error  
+> - 401/403 = authentication/authorization failure  
+> - 404 = resource not found  
+> - 429 = rate-limit exceeded  
+> - Most endpoints deal in JSON, with standard Spring Boot error payloads for validation.
+
+Feel free to integrate this into your project's `README.md`, `HELP.md`, or an OpenAPI/Swagger specification for interactive docs. 
