@@ -4,11 +4,13 @@ services:
     image: mysql:8.0
     container_name: ramen-mysql
     restart: unless-stopped
+    env_file:
+      - ./japanramendirectory/.env
     environment:
-      MYSQL_ROOT_PASSWORD: 915hokanihateyou
-      MYSQL_DATABASE: ramen_directory
-      MYSQL_USER: ramen_user
-      MYSQL_PASSWORD: ramen_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_USER_PASSWORD}
     ports:
       - "3307:3306"
     volumes:
@@ -31,9 +33,9 @@ services:
     env_file:
       - ./japanramendirectory/.env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ramen_directory?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: 915hokanihateyou
+      SPRING_DATASOURCE_URL: ${DOCKER_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_ROOT_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8080:8080"
